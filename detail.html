@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GA4 실습 | 상품 상세</title>
+  <style>
+  :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif; }
+  body { margin: 0; background: #fafafa; color: #111; }
+  header { background: #111; color: #fff; padding: 14px 18px; }
+  header a { color: #fff; text-decoration: none; margin-right: 12px; }
+  main { max-width: 960px; margin: 0 auto; padding: 18px; }
+  .card { background: #fff; border: 1px solid #e6e6e6; border-radius: 10px; padding: 14px; margin: 12px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .product { border: 1px solid #e6e6e6; border-radius: 10px; padding: 12px; background: #fff; }
+  .product h3 { margin: 8px 0 6px; }
+  .muted { color: #666; font-size: 14px; }
+  button, .btn { cursor: pointer; border: 1px solid #111; background: #111; color: #fff; padding: 10px 12px; border-radius: 8px; font-weight: 600; }
+  button.secondary, .btn.secondary { background: #fff; color: #111; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #ddd; background: #fff; font-size: 12px; }
+  .table { width: 100%; border-collapse: collapse; }
+  .table th, .table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+  .right { text-align: right; }
+  footer { padding: 30px 18px; color: #666; text-align: center; }
+  code { background: #f2f2f2; padding: 2px 6px; border-radius: 6px; }
+</style>
+  <!-- Google tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  // =========================
+  // GA4 수업용 데모 사이트 공통 스크립트
+  // 1) 아래 측정 ID를 본인 GA4 측정 ID로 바꾸세요: G-XXXXXXXXXX
+  // 2) DebugView를 쓰려면 URL 뒤에 ?debug=1 을 붙이세요.
+  // =========================
+
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+
+  // 기본 설정
+  gtag('js', new Date());
+
+  // DebugView용 플래그
+  const params = new URLSearchParams(location.search);
+  const debugMode = params.get('debug') === '1';
+
+  gtag('config', 'G-XXXXXXXXXX', {
+    debug_mode: debugMode
+  });
+
+  // 회원/비회원(게스트) 시뮬레이션: localStorage에 membership 저장
+  const membership = localStorage.getItem('membership') || 'guest';
+
+  // 회원이면 user_id도 부여(개인정보 금지: 이메일/전화번호 사용 X)
+  if (membership === 'member') {
+    const existing = localStorage.getItem('user_id');
+    const uid = existing || ('stu_' + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem('user_id', uid);
+
+    // user_id 설정
+    gtag('config', 'G-XXXXXXXXXX', {
+      user_id: uid
+    });
+  }
+
+  // 사용자 속성(세그먼트용)
+  gtag('set', 'user_properties', {
+    membership: membership
+  });
+
+  // 콘솔에 이벤트를 찍어 실습/디버깅하기 쉽도록
+  function track(eventName, params) {
+    try {
+      gtag('event', eventName, params || {});
+      console.log('[GA4 EVENT]', eventName, params || {});
+    } catch (e) {
+      console.warn('GA4 track error:', e);
+    }
+  }
+
+  // 공통 상품 데이터(수업용 더미)
+  const PRODUCTS = [
+    {
+      item_id: 'COAT001',
+      item_name: 'Winter Coat',
+      item_category: 'Outer',
+      price: 89000
+    },
+    {
+      item_id: 'KNIT002',
+      item_name: 'Knit Sweater',
+      item_category: 'Top',
+      price: 49000
+    },
+    {
+      item_id: 'DENIM003',
+      item_name: 'Wide Denim',
+      item_category: 'Bottom',
+      price: 59000
+    }
+  ];
+
+  function findProduct(item_id) {
+    return PRODUCTS.find(p => p.item_id === item_id);
+  }
+
+  // 장바구니(로컬 저장) 유틸
+  function getCart() {
+    try {
+      return JSON.parse(localStorage.getItem('cart') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  function saveCart(cart) {
+    localStorage.setItem('cart', JSON.stringify(cart));
+  }
+
+  function cartTotal(cart) {
+    return cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+  }
+</script>
+</head>
+<body>
+  <header>
+    <a href="index.html">Home</a>
+    <a href="list.html">Shop</a>
+    <a href="cart.html">Cart</a>
+    <span class="pill" id="membership-pill">membership: -</span>
+  </header>
+
+  <main>
+    <div class="card" id="detail-card">
+      <h1>상품 상세</h1>
+      <p class="muted">URL의 <code>?item_id=COAT001</code> 같은 파라미터로 상품을 바꿉니다.</p>
+      <div id="detail-body"></div>
+    </div>
+  </main>
+
+  <footer class="muted">© GA4 Class Demo</footer>
+
+  <script>
+    // membership 표시
+    const pill = document.getElementById('membership-pill');
+    pill.textContent = 'membership: ' + (localStorage.getItem('membership') || 'guest');
+
+    const params = new URLSearchParams(location.search);
+    const itemId = params.get('item_id') || 'COAT001';
+    const p = findProduct(itemId) || PRODUCTS[0];
+
+    // view_item 이벤트 (상세 페이지 로드 시 1회)
+    track('view_item', {
+      currency: 'KRW',
+      value: p.price,
+      items: [{
+        item_id: p.item_id,
+        item_name: p.item_name,
+        item_category: p.item_category,
+        price: p.price,
+        quantity: 1
+      }]
+    });
+
+    // 화면 렌더링
+    const body = document.getElementById('detail-body');
+    body.innerHTML = `
+      <div class="row">
+        <span class="pill">${p.item_category}</span>
+        <span class="pill">상품코드: <code>${p.item_id}</code></span>
+      </div>
+      <h2 style="margin-top:10px;">${p.item_name}</h2>
+      <p class="muted">
+        수업용 더미 상품 설명입니다. (실제 판매 X)
+      </p>
+      <div style="font-size:18px; margin: 10px 0;"><b>${p.price.toLocaleString()}원</b></div>
+
+      <div class="row">
+        <button id="btn-add">장바구니 담기</button>
+        <a class="btn secondary" href="cart.html">장바구니로 이동 →</a>
+        <a class="btn secondary" href="list.html">리스트로 ←</a>
+      </div>
+    `;
+
+    // add_to_cart 이벤트
+    document.getElementById('btn-add').addEventListener('click', () => {
+      const cart = getCart();
+      const found = cart.find(it => it.item_id === p.item_id);
+      if (found) found.quantity += 1;
+      else cart.push({ ...p, quantity: 1 });
+      saveCart(cart);
+
+      track('add_to_cart', {
+        currency: 'KRW',
+        value: p.price,
+        items: [{
+          item_id: p.item_id,
+          item_name: p.item_name,
+          item_category: p.item_category,
+          price: p.price,
+          quantity: 1
+        }]
+      });
+
+      alert('장바구니에 담았습니다!');
+    });
+  </script>
+</body>
+</html>
